@@ -1,7 +1,8 @@
-
 #!/usr/bin/env python3
 
-# Import the subprocess and time modules
+__author__ = "Kevin Medrano Ayala"
+__contact__ = "kevin.ejem18@gmail.com"
+
 import subprocess
 import time
 
@@ -9,12 +10,12 @@ import time
 commands = [
     # Run the Micro XRCE-DDS Agent
     "MicroXRCEAgent udp4 -p 8888",
-
+    
     # Run the PX4 SITL simulation
-    "cd ~/PX4-Autopilot && PX4_GZ_WORLD=baylands make px4_sitl gz_x500_depth"
+    "cd ~/PX4-Autopilot && make px4_sitl gz_x500_depth"
 
     # Run QGroundControl
-    # "cd ~/QGroundControl && ./QGroundControl.AppImage"
+    #"cd ~/qgroundcontrol && ./QGroundControl.AppImage"
 ]
 
 # Loop through each command in the list
@@ -23,4 +24,4 @@ for command in commands:
     subprocess.run(["gnome-terminal", "--tab", "--", "bash", "-c", command + "; exec bash"])
     
     # Pause between each command
-    time.sleep(2)
+    time.sleep(1)

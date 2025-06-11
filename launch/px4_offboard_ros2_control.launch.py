@@ -49,22 +49,22 @@ def generate_launch_description():
         # ExecuteProcess(cmd=['bash', bash_script_path], output='screen'),
         
         Node(
-            package='px4_offboard',
-            namespace='px4_offboard',
+            package='px4_offboard_sim',
+            namespace='px4_offboard_sim',
             executable='velocity_control',
             name='velocity',
             prefix='gnome-terminal --'
         ),
         Node(
-            package='px4_offboard',
-            namespace='px4_offboard',
+            package='px4_offboard_sim',
+            namespace='px4_offboard_sim',
             executable='control',
             name='control',
             prefix='gnome-terminal --',
         ),
         Node(
-            package='px4_offboard',
-            namespace='px4_offboard',
+            package='px4_offboard_sim',
+            namespace='px4_offboard_sim',
             executable='processes',
             name='processes',
             prefix='gnome-terminal --'
@@ -79,8 +79,8 @@ def generate_launch_description():
             ],
         ),
         Node(
-            package='px4_offboard',
-            namespace='px4_offboard',
+            package='px4_offboard_sim',
+            namespace='px4_offboard_sim',
             executable='visualizer',
             name='visualizer'
         ),

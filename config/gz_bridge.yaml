@@ -1,0 +1,33 @@
+# Set List of topics to bridge between Gazebo and ROS2.
+- gz_topic_name: "camera"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  ros_topic_name: "sim_camera/camera"
+
+- gz_topic_name: "camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  ros_topic_name: "sim_camera/camera_info"
+
+- gz_topic_name: "depth_camera"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  ros_topic_name: "sim_depth_camera/depth_camera"
+
+- gz_topic_name: "depth_camera/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
+  ros_topic_name: "sim_depth_camera/points"
+
+- gz_topic_name: "gazebo_imu/imu"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "gz.msgs.IMU"
+  ros_topic_name: "sim_imu/imu"
+
+- gz_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "gz.msgs.Clock"
+  subscriber_queue: 10       # Default 10
+  publisher_queue: 10        # Default 10
+  lazy: false                # Default "false"
+  direction: "GZ_TO_ROS"       # Default "BIDIRECTIONAL" - Bridge both directions

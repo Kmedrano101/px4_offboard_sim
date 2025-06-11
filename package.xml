@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>px4_offboard</name>
+  <name>px4_offboard_sim</name>
   <version>0.0.0</version>
   <description>ROS2 PX4 Interface Velocity Control</description>
   <maintainer email="braden@arkelectron.com">braden</maintainer>
