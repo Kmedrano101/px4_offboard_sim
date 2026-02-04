@@ -1,33 +1,39 @@
-# Set List of topics to bridge between Gazebo and ROS2.
-- gz_topic_name: "camera"
-  ros_type_name: "sensor_msgs/msg/Image"
-  gz_type_name: "gz.msgs.Image"
-  ros_topic_name: "sim_camera/camera"
+# Gazebo-ROS2 Bridge Configuration for SLAM/Mapping
+# World: baylands_custom
+# Model: x500_lidar_360
+#
+# Sensor Extrinsics (relative to base_link):
+#   IMU:   (0, 0, 0) - at base_link origin
+#   LiDAR: (0, 0, 0.26) - centered on top of drone
+#
+# TF Tree: map -> odom -> base_link -> lidar_link
 
-- gz_topic_name: "camera_info"
-  ros_type_name: "sensor_msgs/msg/CameraInfo"
-  gz_type_name: "gz.msgs.CameraInfo"
-  ros_topic_name: "sim_camera/camera_info"
-
-- gz_topic_name: "depth_camera"
-  ros_type_name: "sensor_msgs/msg/Image"
-  gz_type_name: "gz.msgs.Image"
-  ros_topic_name: "sim_depth_camera/depth_camera"
-
-- gz_topic_name: "depth_camera/points"
+# === 3D LiDAR Sensor (PointCloud2 for SLAM) ===
+- gz_topic_name: "/lidar/points"
+  ros_topic_name: "/lidar/points"
   ros_type_name: "sensor_msgs/msg/PointCloud2"
   gz_type_name: "gz.msgs.PointCloudPacked"
-  ros_topic_name: "sim_lidar/lidar"
+  direction: "GZ_TO_ROS"
 
-- gz_topic_name: "gazebo_imu/imu"
+# === 3D LiDAR Sensor (LaserScan for visualization/Nav2) ===
+- gz_topic_name: "/lidar"
+  ros_topic_name: "/lidar/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: "GZ_TO_ROS"
+
+# === IMU Sensor ===
+- gz_topic_name: "/imu"
+  ros_topic_name: "/imu/data"
   ros_type_name: "sensor_msgs/msg/Imu"
   gz_type_name: "gz.msgs.IMU"
-  ros_topic_name: "sim_imu/imu"
+  direction: "GZ_TO_ROS"
 
+# === Clock (for time synchronization) ===
 - gz_topic_name: "/clock"
+  ros_topic_name: "/clock"
   ros_type_name: "rosgraph_msgs/msg/Clock"
   gz_type_name: "gz.msgs.Clock"
-  subscriber_queue: 10       # Default 10
-  publisher_queue: 10        # Default 10
-  lazy: false                # Default "false"
-  direction: "GZ_TO_ROS"       # Default "BIDIRECTIONAL" - Bridge both directions
+  direction: "GZ_TO_ROS"
+  publisher_queue: 10
+  subscriber_queue: 10

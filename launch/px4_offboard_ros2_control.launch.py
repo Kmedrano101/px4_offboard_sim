@@ -36,31 +36,28 @@ __author__ = "Braden Wagstaff"
 __contact__ = "braden@arkelectron.com"
 
 from launch import LaunchDescription
-from launch.actions import ExecuteProcess
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 import os
 
 
 def generate_launch_description():
-    package_dir = get_package_share_directory('px4_offboard')
-    # bash_script_path = os.path.join(package_dir, 'scripts', 'TerminatorScript.sh')
+    package_dir = get_package_share_directory('px4_offboard_sim')
+
     return LaunchDescription([
-        # ExecuteProcess(cmd=['bash', bash_script_path], output='screen'),
-        
         Node(
             package='px4_offboard_sim',
             namespace='px4_offboard_sim',
-            executable='velocity_control',
-            name='velocity',
-            prefix='gnome-terminal --'
+            executable='offboard_control',
+            name='offboard_control',
+            output='screen'
         ),
         Node(
             package='px4_offboard_sim',
             namespace='px4_offboard_sim',
-            executable='control',
-            name='control',
-            prefix='gnome-terminal --',
+            executable='joy_control',
+            name='joy_control',
+            prefix='gnome-terminal --'
         ),
         Node(
             package='px4_offboard_sim',
@@ -73,22 +70,16 @@ def generate_launch_description():
             package='ros_gz_bridge',
             executable='parameter_bridge',
             name='gz_parameter_bridge',
-            prefix='gnome-terminal --',
+            output='screen',
             parameters=[
                 {'config_file': os.path.join(package_dir, 'resource', 'gz_ros2_bridge_list.yaml')}
             ],
-        ),
-        Node(
-            package='px4_offboard_sim',
-            namespace='px4_offboard_sim',
-            executable='visualizer',
-            name='visualizer'
         ),
         Node(
             package='rviz2',
             namespace='',
             executable='rviz2',
             name='rviz2',
-            arguments=['-d', [os.path.join(package_dir, 'visualize.rviz')]]
+            arguments=['-d', [os.path.join(package_dir, 'resource', 'visualize.rviz')]]
         )
     ])

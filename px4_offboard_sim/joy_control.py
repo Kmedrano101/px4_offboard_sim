@@ -77,7 +77,6 @@ def create_twist_message(x, y, z, th, speed, turn, x_val, y_val, z_val, yaw_val,
     twist.linear.y = round(y_val, 2)
     twist.linear.z = round(z_val, 2)
     twist.angular.z = round(yaw_val, 2)
-    print("X:", twist.linear.x, "   Y:", twist.linear.y, "   Z:", twist.linear.z, "   Yaw:", twist.angular.z)
     return twist, x_val, y_val, z_val, yaw_val
 
 class JoyControlNode(Node):
@@ -107,10 +106,19 @@ class JoyControlNode(Node):
         self.y_val = 0.0
         self.z_val = 0.0
         self.yaw_val = 0.0
-        self.last_axes = 0
+        self.last_axes = []
+        self.last_buttons = []
+        self.twist = geometry_msgs.msg.Twist()
+
+        # Timer to publish velocity commands continuously at 50Hz
+        self.timer = self.create_timer(0.02, self.timer_callback)
+
         self.spin_thread = threading.Thread(target=rclpy.spin, args=(self,), daemon=True)
         self.spin_thread.start()
-        self.twist = geometry_msgs.msg.Twist()
+
+    def timer_callback(self):
+        """Publish velocity commands continuously at 50Hz"""
+        self.pub.publish(self.twist)
 
     def joy_callback(self, msg):
         x, y, z, th = msg.axes[3], msg.axes[4], msg.axes[1], -msg.axes[0]

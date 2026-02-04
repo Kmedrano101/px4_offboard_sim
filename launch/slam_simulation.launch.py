@@ -50,14 +50,6 @@ def generate_launch_description():
         ),
         Node(
             package='px4_offboard_sim',
-            executable='frame_manager',
-            name='frame_manager',
-            namespace='px4_offboard_sim',
-            prefix='gnome-terminal --',
-            parameters=[{'use_sim_time': True}]
-        ),
-        Node(
-            package='px4_offboard_sim',
             namespace='px4_offboard_sim',
             executable='offboard_control',
             name='offboard_control',
