@@ -25,7 +25,7 @@ def generate_launch_description():
         Node(
             package='px4_offboard_sim',
             namespace='px4_offboard_sim',
-            executable='joy_control',
+            executable='joy_control_node',
             name='joy_control',
             prefix='gnome-terminal --',
             parameters=[{'use_sim_time': True}]
@@ -51,9 +51,12 @@ def generate_launch_description():
         Node(
             package='px4_offboard_sim',
             namespace='px4_offboard_sim',
-            executable='offboard_control',
+            executable='offboard_control_node',
             name='offboard_control',
             output='screen',
-            parameters=[{'use_sim_time': True}]
+            parameters=[
+                os.path.join(package_dir, 'config', 'offboard_control.yaml'),
+                {'use_sim_time': True},
+            ]
         )
     ])

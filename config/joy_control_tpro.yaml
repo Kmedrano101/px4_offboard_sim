@@ -1,0 +1,70 @@
+# Jumper T-Pro V2 controller mapping (EdgeTX Classic mode, AETR channel order)
+#
+# EdgeTX radio setup required:
+#   1. Channel order: AETR (Radio Setup > Default Channel Order)
+#   2. USB Joystick: Classic mode
+#   3. Mixes page — assign switches to channels:
+#        CH5 = SA (3-pos, flight mode)
+#        CH6 = SB (3-pos, auxiliary)
+#        CH9 = SC (momentary, arm)    -> Button 0
+#        CH10 = SD (momentary, disarm) -> Button 1
+#   4. Connect USB-C, select "USB Joystick" on radio screen
+#
+# Verify with: jstest /dev/input/js0   (axes 0-3, buttons 0-1)
+# USB ID: 1209:4f54 (EdgeTX Joystick)
+#
+# Note: Left stick Y (throttle) is non-centering in Mode 2.
+#       Center it manually before arming, or configure self-centering gimbals.
+
+/**:
+  ros__parameters:
+    # Speed scaling
+    speed: 0.3
+    turn: 0.2
+    speed_step: 0.05
+    turn_step: 0.025
+    max_speed: 2.0
+    max_turn: 1.0
+
+    # Smoothing
+    ramp_rate: 0.15
+    decay_rate: 0.92
+    hold_duration: 0.3
+    dead_zone: 0.005
+
+    # Jumper T-Pro V2 axis mapping (EdgeTX Classic, AETR)
+    #   CH1 = Aileron  (Right Stick X) -> Axis 0 = Roll
+    #   CH2 = Elevator (Right Stick Y) -> Axis 1 = Pitch
+    #   CH3 = Throttle (Left Stick Y)  -> Axis 2 = Throttle
+    #   CH4 = Rudder   (Left Stick X)  -> Axis 3 = Yaw
+    joy_axis_pitch: 1
+    joy_axis_roll: 0
+    joy_axis_throttle: 2
+    joy_axis_yaw: 3
+    joy_deadzone: 0.03      # Hall gimbals have good linearity, lower deadzone ok
+
+    # Button mapping — SC+SD combo to toggle arm/disarm
+    # Both buttons must be pressed simultaneously to toggle
+    joy_button_arm: 0       # SC momentary (CH9 = Button 0)
+    joy_button_disarm: 1    # SD momentary (CH10 = Button 1)
+
+    # Speed preset — SB 3-position switch (CH6 = Axis 5)
+    #   Down  (-1) = Slow   0.15 m/s — precision/indoor
+    #   Center (0) = Normal 0.30 m/s — default
+    #   Up    (+1) = Fast   0.60 m/s — open area
+    joy_axis_speed_preset: 5
+    speed_slow: 0.15
+    speed_normal: 0.30
+    speed_fast: 0.60
+    turn_slow: 0.10
+    turn_normal: 0.20
+    turn_fast: 0.40
+
+    # Control rate
+    control_rate: 50.0
+
+    # Topics
+    topics:
+      cmd_vel: "/offboard_control/cmd_vel"
+      arm: "/offboard_control/arm"
+      joy: "/joy"

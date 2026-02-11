@@ -1,0 +1,35 @@
+/**:
+  ros__parameters:
+    # Speed scaling
+    speed: 0.3              # Linear velocity scale (m/s)
+    turn: 0.2               # Angular velocity scale (rad/s)
+    speed_step: 0.05        # Q/E speed increment
+    turn_step: 0.025        # Q/E turn increment
+    max_speed: 2.0          # Max linear speed
+    max_turn: 1.0           # Max turn rate
+
+    # Smoothing
+    ramp_rate: 0.15         # Ramp-up rate (0-1, lower = smoother)
+    decay_rate: 0.92        # Decay when no input (0-1, higher = slower)
+    hold_duration: 0.3      # Seconds to hold target after key release
+    dead_zone: 0.005        # Velocity threshold to zero out
+
+    # Joystick axis mapping (PS4 default)
+    joy_axis_pitch: 4       # Right stick Y -> forward/back
+    joy_axis_roll: 3        # Right stick X -> left/right
+    joy_axis_throttle: 1    # Left stick Y -> up/down
+    joy_axis_yaw: 0         # Left stick X -> yaw
+    joy_deadzone: 0.05      # Joystick dead zone
+
+    # Joystick button mapping
+    joy_button_disarm: 0    # X button (PS4) / A (Xbox)
+    joy_button_arm: 2       # Square button (PS4) / X (Xbox)
+
+    # Control rate
+    control_rate: 50.0      # Hz
+
+    # Topics
+    topics:
+      cmd_vel: "/offboard_control/cmd_vel"
+      arm: "/offboard_control/arm"
+      joy: "/joy"

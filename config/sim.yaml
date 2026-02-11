@@ -1,0 +1,99 @@
+# PX4 Offboard Sim: Simulation environment configuration
+# Edit this file to change sim parameters without touching the launch file.
+# This is the single source of truth for the entire simulation stack.
+
+# ── PX4 SITL ─────────────────────────────────────────────
+px4:
+  autopilot_dir: "~/PX4-Autopilot"
+  sim_model: "gz_x500_depth"
+  gz_no_follow: true
+
+# ── Drone Start Position ─────────────────────────────────
+# PX4_GZ_MODEL_POSE format: x,y,z,roll,pitch,yaw (meters, radians)
+# yaw=0 means facing +X direction
+drone_start:
+  x: 0.0
+  y: 0.0
+  z: 0.5
+  roll: 0.0
+  pitch: 0.0
+  yaw: 0.0
+
+# ── MicroXRCE-DDS Agent ──────────────────────────────────
+dds_agent:
+  binary: "~/Micro-XRCE-DDS-Agent/build/MicroXRCEAgent"
+  transport: "udp4"
+  port: 8888
+
+# ── ROS Middleware ────────────────────────────────────────
+rmw_implementation: "rmw_fastrtps_cpp"
+
+# ── TF Frames ────────────────────────────────────────────
+frames:
+  map_frame_id: "map"
+  body_frame_id: "odom"
+
+# ── World ─────────────────────────────────────────────────
+# Available: baylands, baylands_custom (with test walls), default
+world: "baylands_custom"
+
+# ── Gazebo-ROS Bridge ────────────────────────────────────
+# Sensor topic mappings from Gazebo to ROS2.
+# gz_topic_name uses world-scoped absolute paths:
+#   /world/{world}/model/{model_instance}/link/{link}/sensor/{sensor}/{topic}
+# The {world} and {model_instance} placeholders are resolved at launch time
+# from the 'world' and 'px4.sim_model' fields above.
+# model_instance is derived as: sim_model (without gz_ prefix) + "_0"
+bridge:
+  sensors:
+    - name: "RGB Camera"
+      gz_topic: "/world/{world}/model/{model}/link/camera_link/sensor/camera/image"
+      ros_topic: "/sim_camera/camera"
+      ros_type: "sensor_msgs/msg/Image"
+      gz_type: "gz.msgs.Image"
+      queue: 5
+
+    - name: "Camera Info"
+      gz_topic: "/world/{world}/model/{model}/link/camera_link/sensor/camera/camera_info"
+      ros_topic: "/sim_camera/camera_info"
+      ros_type: "sensor_msgs/msg/CameraInfo"
+      gz_type: "gz.msgs.CameraInfo"
+      queue: 5
+
+    - name: "Depth Camera"
+      gz_topic: "/world/{world}/model/{model}/link/depth_camera_link/sensor/depth_camera/depth_image"
+      ros_topic: "/sim_depth_camera/depth_camera"
+      ros_type: "sensor_msgs/msg/Image"
+      gz_type: "gz.msgs.Image"
+      queue: 5
+
+    - name: "Depth PointCloud"
+      gz_topic: "/world/{world}/model/{model}/link/depth_camera_link/sensor/depth_camera/points"
+      ros_topic: "/sim_depth_camera/points"
+      ros_type: "sensor_msgs/msg/PointCloud2"
+      gz_type: "gz.msgs.PointCloudPacked"
+      queue: 5
+
+    - name: "IMU"
+      gz_topic: "/world/{world}/model/{model}/link/imu_link/sensor/imu/imu"
+      ros_topic: "/sim_imu/imu"
+      ros_type: "sensor_msgs/msg/Imu"
+      gz_type: "gz.msgs.IMU"
+      queue: 10
+
+  # Clock bridge (not model-scoped)
+  clock:
+    ros_type: "rosgraph_msgs/msg/Clock"
+    gz_type: "gz.msgs.Clock"
+    queue: 10
+
+# ── Joy Control ──────────────────────────────────────────
+# Controller presets: tpro (Jumper T-Pro V2), gamepad (PS4/Xbox)
+joy:
+  controller: "tpro"
+  device: ""                 # Auto-select from controller preset if empty
+
+# ── Offboard Control ─────────────────────────────────────
+# Config file for offboard control parameters (relative to config/)
+offboard:
+  config: "offboard_control.yaml"

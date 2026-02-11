@@ -1,0 +1,49 @@
+# ros_gz_bridge topic mappings: Gazebo Harmonic -> ROS2
+# Bridges sensors on the x500_depth model to ROS2 topics.
+
+# RGB Camera
+- gz_topic_name: "camera"
+  ros_topic_name: "/sim_camera/camera"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+  publisher_queue: 5
+
+# Camera Info
+- gz_topic_name: "camera_info"
+  ros_topic_name: "/sim_camera/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+  publisher_queue: 5
+
+# Depth Camera Image
+- gz_topic_name: "depth_camera"
+  ros_topic_name: "/sim_depth_camera/depth_camera"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+  publisher_queue: 5
+
+# Depth Camera PointCloud
+- gz_topic_name: "depth_camera/points"
+  ros_topic_name: "/sim_depth_camera/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
+  direction: GZ_TO_ROS
+  publisher_queue: 5
+
+# IMU
+- gz_topic_name: "gazebo_imu/imu"
+  ros_topic_name: "/sim_imu/imu"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "gz.msgs.IMU"
+  direction: GZ_TO_ROS
+  publisher_queue: 10
+
+# Simulation clock
+- topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "gz.msgs.Clock"
+  direction: GZ_TO_ROS
+  publisher_queue: 10
