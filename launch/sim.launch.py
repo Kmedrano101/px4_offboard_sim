@@ -231,12 +231,6 @@ def generate_launch_description():
         description='Launch offboard control node',
     )
 
-    frame_manager_arg = DeclareLaunchArgument(
-        'frame_manager',
-        default_value='true',
-        choices=['true', 'false'],
-        description='Launch frame manager for Gazebo frame_id remapping',
-    )
 
     # ── PX4 paths ─────────────────────────────────────────────
     px4_build = os.path.join(px4_dir, 'build', 'px4_sitl_default')
@@ -339,15 +333,6 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('offboard')),
     )
 
-    # ── Frame manager ─────────────────────────────────────────
-    frame_manager_node = Node(
-        package='px4_offboard_sim',
-        executable='frame_manager.py',
-        name='frame_manager',
-        parameters=[{'use_sim_time': True}],
-        output='screen',
-        condition=IfCondition(LaunchConfiguration('frame_manager')),
-    )
 
     # ── Joy control (keyboard + gamepad) ──────────────────────
     joy_control_launch = OpaqueFunction(
@@ -360,7 +345,6 @@ def generate_launch_description():
         px4_dir_arg,
         joy_arg,
         offboard_arg,
-        frame_manager_arg,
         set_gz_resource_path,
         set_gz_plugin_path,
         set_gz_server_config,
@@ -370,6 +354,5 @@ def generate_launch_description():
         setup_sim,
         static_tf,
         offboard_node,
-        frame_manager_node,
         joy_control_launch,
     ])

@@ -91,7 +91,7 @@ bridge:
 # Controller presets: tpro (Jumper T-Pro V2), gamepad (PS4/Xbox)
 joy:
   controller: "tpro"
-  device: ""                 # Auto-select from controller preset if empty
+  device: "/dev/input/js0"   # Jumper T-Pro V2 (override preset default of js1)
 
 # ── Offboard Control ─────────────────────────────────────
 # Config file for offboard control parameters (relative to config/)

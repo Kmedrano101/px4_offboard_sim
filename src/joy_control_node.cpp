@@ -306,6 +306,18 @@ private:
     std::lock_guard<std::mutex> lock(mtx_);
     using_joystick_ = true;
 
+    // Log joystick info on first message
+    if (!joy_info_logged_) {
+      joy_info_logged_ = true;
+      RCLCPP_INFO(get_logger(),
+        "Joystick connected: %zu axes, %zu buttons | speed_preset_axis=%d %s",
+        msg->axes.size(), msg->buttons.size(),
+        joy_axis_speed_preset_,
+        (joy_axis_speed_preset_ >= 0 &&
+         joy_axis_speed_preset_ < static_cast<int>(msg->axes.size()))
+          ? "(ACTIVE)" : "(NOT AVAILABLE — check EdgeTX channel config)");
+    }
+
     auto safe_axis = [&](int idx) -> double {
       if (idx < 0 || idx >= static_cast<int>(msg->axes.size())) return 0.0;
       double val = msg->axes[idx];
@@ -328,7 +340,7 @@ private:
       std_msgs::msg::Bool arm_msg;
       arm_msg.data = arm_toggle_;
       arm_pub_->publish(arm_msg);
-      RCLCPP_INFO(get_logger(), "Joystick: %s", arm_toggle_ ? "Armed" : "Disarmed");
+      RCLCPP_INFO(get_logger(), "Joystick: %s", arm_toggle_ ? "ARMED" : "DISARMED");
     }
 
     last_combo_btn_ = combo_pressed;
@@ -348,7 +360,8 @@ private:
       if (std::abs(speed_ - new_speed) > 0.001) {
         speed_ = new_speed;
         turn_ = new_turn;
-        RCLCPP_INFO(get_logger(), "Speed preset: %s (%.2f m/s, %.2f rad/s)", label, speed_, turn_);
+        RCLCPP_WARN(get_logger(), ">>> SPEED: %s — %.2f m/s, %.2f rad/s <<<",
+                    label, speed_, turn_);
       }
     }
   }
@@ -443,6 +456,7 @@ private:
   bool using_joystick_{false};
   bool arm_toggle_{false};
   bool last_combo_btn_{false};
+  bool joy_info_logged_{false};
   double last_key_time_{0.0};
 
   double target_x_{0.0};
