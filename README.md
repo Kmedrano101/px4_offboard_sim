@@ -1,15 +1,16 @@
 # PX4 Offboard Simulation
 
-ROS2 package for PX4 offboard control and SLAM simulation with Gazebo Harmonic.
+ROS2 (C++/Python) package for PX4 offboard drone control with Gazebo Harmonic simulation. Provides a full-stack solution including a flight control state machine, keyboard/gamepad input, 3D LiDAR and IMU simulation, and SLAM-ready sensor bridging.
 
 ## Features
 
-- **Offboard velocity control** for PX4 drones via ROS2
-- **Keyboard and joystick control** (PS4 controller support)
-- **Gazebo-ROS2 bridge** configuration for sensor data
-- **3D LiDAR simulation** (360° horizontal, 45° vertical FOV)
-- **IMU data** at 200 Hz for state estimation
-- **SLAM-ready** sensor configuration with documented extrinsics
+- **Offboard flight control state machine** — IDLE → STREAMING → ARMING → TAKEOFF → HOVER → LANDING with automatic mode switching between position-hold and velocity control
+- **Keyboard and gamepad input** — terminal keyboard control, PS4/Xbox gamepad, and Jumper T-Pro V2 RC transmitter support with velocity ramping and exponential decay
+- **3D LiDAR simulation** — 360° horizontal, 45° vertical FOV, 11,520 points/scan at 20 Hz
+- **IMU at 200 Hz** for real-time state estimation
+- **Gazebo-ROS2 bridge** with configurable sensor topic mapping
+- **One-command launch** via `sim.launch.py` that orchestrates PX4 SITL, XRCE-DDS, Gazebo bridge, control nodes, and TF publishers
+- **SLAM integration** with RTAB-Map launch file and sensor extrinsics
 
 ## Requirements
 
@@ -17,6 +18,7 @@ ROS2 package for PX4 offboard control and SLAM simulation with Gazebo Harmonic.
 - Gazebo Harmonic
 - PX4 Autopilot (v1.15+)
 - MicroXRCE-DDS Agent
+- `px4_msgs` ROS2 package
 
 ## Installation
 
@@ -25,7 +27,7 @@ ROS2 package for PX4 offboard control and SLAM simulation with Gazebo Harmonic.
 cd ~/ros2_ws/src
 git clone <repository-url> px4_offboard_sim
 
-# Install dependencies
+# Install ROS2 dependencies
 cd ~/ros2_ws
 rosdep install --from-paths src --ignore-src -r -y
 
@@ -36,128 +38,251 @@ source install/setup.bash
 
 ## Quick Start
 
-### 1. Start PX4 SITL with Gazebo
+### Option A — Full stack with `sim.launch.py` (recommended)
+
+This single command launches everything: PX4 SITL, MicroXRCE-DDS Agent, Gazebo-ROS2 bridge, offboard control node, joy control node, and static TF publishers.
+
+```bash
+ros2 launch px4_offboard_sim sim.launch.py
+```
+
+Optional arguments:
+
+```bash
+ros2 launch px4_offboard_sim sim.launch.py \
+  world:=baylands_custom \
+  px4_autopilot_dir:=~/PX4-Autopilot \
+  joy:=true \
+  offboard:=true
+```
+
+### Option B — Manual step-by-step
+
+#### 1. Start PX4 SITL with Gazebo
 
 ```bash
 cd ~/PX4-Autopilot
-PX4_GZ_WORLD=baylands_custom make px4_sitl gz_x500_lidar_360
+PX4_GZ_WORLD=baylands_custom make px4_sitl gz_x500_depth
 ```
 
-### 2. Start MicroXRCE-DDS Agent
+#### 2. Start MicroXRCE-DDS Agent
 
 ```bash
 MicroXRCEAgent udp4 -p 8888
 ```
 
-### 3. Start Gazebo-ROS2 Bridge
+#### 3. Start Gazebo-ROS2 Bridge
 
 ```bash
 ros2 run ros_gz_bridge parameter_bridge \
   --ros-args -p config_file:=$(ros2 pkg prefix px4_offboard_sim)/share/px4_offboard_sim/config/gz_bridge.yaml
 ```
 
-### 4. Run Offboard Control
+#### 4. Run Control Nodes
 
 ```bash
-ros2 run px4_offboard_sim offboard_control
-ros2 run px4_offboard_sim joy_control
+ros2 launch px4_offboard_sim offboard_control.launch.py
+ros2 launch px4_offboard_sim joy_control.launch.py controller:=tpro
+```
+
+### Option C — Tmux multi-pane session
+
+```bash
+bash scripts/run_simulation.sh
+# Attach: tmux attach -t px4_offboard_sim
+# Kill:   tmux kill-session -t px4_offboard_sim
+```
+
+## Architecture
+
+```
+Gamepad / Keyboard
+       │
+       ▼
+ JoyControlNode          (velocity ramping, deadzone filtering)
+       │
+       ▼  /offboard_control/cmd_vel (geometry_msgs/Twist)
+       │  /offboard_control/arm     (std_msgs/Bool)
+       │
+       ▼
+ OffboardControlNode     (state machine, setpoint generation)
+       │
+       ▼  /fmu/in/trajectory_setpoint
+       │  /fmu/in/offboard_control_mode
+       │  /fmu/in/vehicle_command
+       │
+       ▼
+   PX4 SITL  ◄──►  MicroXRCE-DDS Agent  ◄──►  ROS2 DDS
+       │
+       ▼
+ Gazebo Harmonic         (physics, sensors)
+       │
+       ▼  gz transport topics
+       │
+       ▼
+ ros_gz_bridge           (Gazebo → ROS2 message translation)
+       │
+       ▼  /lidar/points, /imu/data, /clock
 ```
 
 ## Package Structure
 
 ```
 px4_offboard_sim/
-├── config/
-│   └── gz_bridge.yaml          # Gazebo-ROS2 bridge configuration
-├── docs/
-│   ├── sensor_configuration.md # Sensor specs and extrinsics
-│   └── custom_gazebo_models.md # Custom world/model guide
-├── launch/
-│   ├── slam_simulation.launch.py
-│   └── px4_offboard_ros2_control.launch.py
+├── src/
+│   ├── offboard_control_node.cpp    # Flight control state machine (C++)
+│   └── joy_control_node.cpp         # Keyboard/gamepad input handler (C++)
 ├── px4_offboard_sim/
-│   ├── offboard_control.py     # Main offboard control node
-│   ├── joy_control.py          # Keyboard/joystick input
-│   └── processes.py            # Process launcher
+│   ├── __init__.py
+│   └── processes.py                 # Background process launcher (Python)
+├── launch/
+│   ├── sim.launch.py                # Full-stack master launcher
+│   ├── offboard_control.launch.py   # Standalone offboard control
+│   ├── joy_control.launch.py        # Standalone joy with controller selection
+│   ├── slam_simulation.launch.py    # RTAB-Map SLAM launcher
+│   ├── px4_offboard_3d_mapping.launch.py
+│   └── px4_offboard_ros2_control.launch.py
+├── config/
+│   ├── sim.yaml                     # Master simulation config
+│   ├── offboard_control.yaml        # Flight control parameters
+│   ├── joy_control.yaml             # PS4/Xbox gamepad config
+│   ├── joy_control_tpro.yaml        # Jumper T-Pro V2 RC config
+│   ├── gz_bridge.yaml               # Gazebo-ROS2 bridge (LiDAR + IMU)
+│   └── bridge.yaml                  # Deprecated bridge config
+├── worlds/
+│   ├── baylands.sdf                 # Standard Baylands world
+│   └── baylands_custom.sdf          # Baylands with test walls
+├── models/                          # Custom Gazebo models
 ├── resource/
-│   ├── drone_tf_params.yaml
-│   └── visualize.rviz
-└── scripts/
-    └── run_simulation.sh       # Tmux-based full stack launcher
+│   ├── drone_tf_params.yaml         # TF frame publisher params
+│   ├── visualize.rviz               # RViz2 visualization config
+│   └── gz_ros2_bridge_list.yaml
+├── docs/
+│   ├── sensor_configuration.md      # Sensor specs and extrinsics
+│   └── custom_gazebo_models.md      # World/model customization guide
+├── scripts/
+│   └── run_simulation.sh            # Tmux multi-pane launcher
+└── logs/
 ```
+
+## Control Nodes
+
+### OffboardControlNode (C++)
+
+State machine that manages the full flight lifecycle:
+
+| State | Description |
+|-------|-------------|
+| `IDLE` | Waiting for arm command |
+| `STREAMING` | Streaming setpoints to PX4 (must reach threshold before arming) |
+| `SWITCH_TO_OFFBOARD` | Requesting offboard mode from PX4 |
+| `ARMING` | Arming the vehicle |
+| `TAKEOFF` | Climbing to target altitude |
+| `HOVER` | Position-hold or velocity control (auto-switches based on input) |
+| `LANDING` | Automated descent with disarm |
+
+Key parameters (`config/offboard_control.yaml`):
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `takeoff_altitude` | 3.0 m | Target takeoff height |
+| `landing_descent_speed` | 0.5 m/s | Descent rate during landing |
+| `min_safe_altitude` | 1.5 m | Lowest allowed hover altitude |
+| `velocity_threshold` | 0.02 | Input magnitude to trigger velocity mode |
+| `position_switch_delay` | 0.5 s | Delay before switching back to position-hold |
+| `streaming_threshold` | 50 | Setpoints required before arming (1 s at 50 Hz) |
+| `control_rate` | 50 Hz | Main loop frequency |
+| `landing_timeout` | 30 s | Max auto-land duration |
+
+### JoyControlNode (C++)
+
+Handles keyboard and gamepad input with velocity ramping and smoothing.
+
+**Keyboard controls:**
+
+| Key | Action |
+|-----|--------|
+| W / S | Throttle up / down (Z velocity) |
+| A / D | Yaw left / right |
+| Arrow Up / Down | Pitch forward / backward |
+| Arrow Left / Right | Roll left / right |
+| Q / E | Decrease / increase speed |
+| Space | Toggle arm / disarm |
+| X | Emergency stop |
+
+**Supported controllers:**
+
+| Controller | Config file | Launch argument |
+|------------|------------|-----------------|
+| PS4 / Xbox gamepad | `joy_control.yaml` | `controller:=gamepad` |
+| Jumper T-Pro V2 | `joy_control_tpro.yaml` | `controller:=tpro` (default) |
+
+**Jumper T-Pro V2 axis mapping (EdgeTX, AETR):**
+
+| Channel | Axis | Function |
+|---------|------|----------|
+| CH1 (Aileron) | 0 | Roll |
+| CH2 (Elevator) | 1 | Pitch |
+| CH3 (Throttle) | 2 | Throttle |
+| CH4 (Rudder) | 3 | Yaw |
+| CH5 (SA switch) | 4 | Flight mode |
+| CH6 (SB switch) | 5 | Speed preset |
+| CH9 (SC switch) | Button 0 | Arm |
+| CH10 (SD switch) | Button 1 | Disarm |
+
+**Speed presets** (via CH6 switch on T-Pro):
+
+| Preset | Linear | Angular | Use case |
+|--------|--------|---------|----------|
+| Slow | 0.15 m/s | 0.10 rad/s | Precision / indoor |
+| Normal | 0.30 m/s | 0.20 rad/s | Default |
+| Fast | 0.60 m/s | 0.40 rad/s | Open area |
 
 ## Sensor Configuration
 
-### Gazebo Topics (Short Names)
+### Gazebo → ROS2 Bridge Topics
 
-| Sensor | Gazebo Topic | Message Type |
-|--------|--------------|--------------|
-| 3D LiDAR | `/lidar/points` | `gz.msgs.PointCloudPacked` |
-| LiDAR Scan | `/lidar` | `gz.msgs.LaserScan` |
-| IMU | `/imu` | `gz.msgs.IMU` |
-| Clock | `/clock` | `gz.msgs.Clock` |
+| Sensor | Gazebo Topic | ROS2 Topic | Message Type | Rate |
+|--------|-------------|------------|--------------|------|
+| 3D LiDAR (point cloud) | `/lidar/points` | `/lidar/points` | `sensor_msgs/PointCloud2` | 20 Hz |
+| 3D LiDAR (scan) | `/lidar` | `/lidar/scan` | `sensor_msgs/LaserScan` | 20 Hz |
+| IMU | `/imu` | `/imu/data` | `sensor_msgs/Imu` | 200 Hz |
+| Clock | `/clock` | `/clock` | `rosgraph_msgs/Clock` | Sim time |
 
-### ROS2 Topics (Bridged)
-
-| Topic | Message Type | Rate |
-|-------|--------------|------|
-| `/lidar/points` | `sensor_msgs/msg/PointCloud2` | 20 Hz |
-| `/lidar/scan` | `sensor_msgs/msg/LaserScan` | 20 Hz |
-| `/imu/data` | `sensor_msgs/msg/Imu` | 200 Hz |
-| `/clock` | `rosgraph_msgs/msg/Clock` | Sim time |
-
-### Sensor Extrinsics
-
-| Sensor | Frame | Position (relative to base_link) |
-|--------|-------|----------------------------------|
-| IMU | `base_link` | (0, 0, 0) m |
-| LiDAR | `lidar_link` | (0, 0, 0.26) m |
-
-**Transform base_link → lidar_link:**
-```
-Translation: [0, 0, 0.26]
-Rotation: [0, 0, 0, 1] (identity quaternion)
-```
-
-## 3D LiDAR Specifications
+### 3D LiDAR Specifications
 
 | Parameter | Value |
 |-----------|-------|
 | Horizontal FOV | 360° |
-| Horizontal Samples | 720 (0.5° resolution) |
+| Horizontal samples | 720 (0.5° resolution) |
 | Vertical FOV | 45° (±22.5°) |
-| Vertical Channels | 16 (2.8° resolution) |
-| Points per Scan | 11,520 |
-| Range | 0.1 - 30.0 m |
-| Update Rate | 20 Hz |
+| Vertical channels | 16 (2.8° resolution) |
+| Points per scan | 11,520 |
+| Range | 0.1 – 30.0 m |
+| Update rate | 20 Hz |
 
-## Keyboard Controls
+### Sensor Extrinsics
 
-| Key | Action |
-|-----|--------|
-| W | Up (Z+) |
-| S | Down (Z-) |
-| A | Yaw Left |
-| D | Yaw Right |
-| ↑ | Pitch Forward |
-| ↓ | Pitch Backward |
-| ← | Roll Left |
-| → | Roll Right |
-| Space | Arm/Disarm |
+TF tree: `map → odom → base_link → lidar_link`
+
+| Sensor | Frame | Position (relative to base_link) | Orientation |
+|--------|-------|----------------------------------|-------------|
+| IMU | `base_link` | (0, 0, 0) m | Identity |
+| LiDAR | `lidar_link` | (0, 0, 0.26) m | Identity |
 
 ## Custom Gazebo Models
 
-This package is designed to work with custom PX4 Gazebo models:
+The package includes custom Gazebo worlds and is designed to work with custom PX4 models:
 
-- **World:** `baylands_custom` - Baylands park environment
-- **Drone:** `x500_lidar_360` - X500 with 3D LiDAR
-- **LiDAR:** `lidar_360` - Custom 3D scanning LiDAR
+| Asset | Name | Description |
+|-------|------|-------------|
+| World | `baylands` | Standard Baylands park environment |
+| World | `baylands_custom` | Baylands with test walls forming a 3-sided enclosure |
+| Drone | `x500_depth` | X500 quadrotor with depth camera |
+| Drone | `x500_lidar_360` | X500 with 3D LiDAR (custom PX4 model) |
+| Sensor | `lidar_360` | 360° × 45° scanning LiDAR |
 
-See [docs/custom_gazebo_models.md](docs/custom_gazebo_models.md) for details on modifying these models.
-
-## PX4 Gazebo Model Files
-
-The following files in PX4-Autopilot are used by this package:
+Custom PX4 model files are expected at:
 
 ```
 PX4-Autopilot/
@@ -170,10 +295,32 @@ PX4-Autopilot/
     └── 4022_gz_x500_lidar_360
 ```
 
-## Documentation
+The `sim.launch.py` launcher can automatically symlink the worlds and models from this package into the PX4 directory.
 
-- [Sensor Configuration](docs/sensor_configuration.md) - Detailed sensor specs, extrinsics, and bridge configuration
-- [Custom Gazebo Models](docs/custom_gazebo_models.md) - Guide to modifying world and model files
+See [docs/custom_gazebo_models.md](docs/custom_gazebo_models.md) for details on modifying these models.
+
+## Launch Files
+
+| Launch file | Description |
+|-------------|-------------|
+| `sim.launch.py` | Full-stack: PX4 SITL + XRCE-DDS + bridge + control + TF |
+| `offboard_control.launch.py` | Offboard control node only |
+| `joy_control.launch.py` | Joy control with controller selection (`tpro` / `gamepad`) |
+| `slam_simulation.launch.py` | RTAB-Map SLAM integration |
+| `px4_offboard_3d_mapping.launch.py` | 3D mapping pipeline |
+| `px4_offboard_ros2_control.launch.py` | Legacy launcher with RViz |
+
+## Configuration
+
+All configuration lives under `config/`:
+
+| File | Purpose |
+|------|---------|
+| `sim.yaml` | Master config — PX4 paths, drone start position, world, DDS, bridge topics, controller selection |
+| `offboard_control.yaml` | Flight parameters — altitude, speeds, thresholds, PX4 topic names |
+| `joy_control.yaml` | PS4/Xbox gamepad axis mapping, speed scaling, smoothing |
+| `joy_control_tpro.yaml` | Jumper T-Pro V2 channel mapping, speed presets, deadzone |
+| `gz_bridge.yaml` | Gazebo-ROS2 bridge topic definitions (LiDAR + IMU) |
 
 ## Troubleshooting
 
@@ -181,7 +328,7 @@ PX4-Autopilot/
 
 1. Verify Gazebo topics exist:
    ```bash
-   gz topic -l | grep -E "^/(imu|lidar)"
+   gz topic -l | grep -E "^/(imu|lidar|clock)"
    ```
 
 2. Check bridge is running:
@@ -196,10 +343,32 @@ PX4-Autopilot/
 
 ### Clock synchronization issues
 
-Enable simulation time in your nodes:
+Ensure nodes use simulation time:
 ```python
 parameters=[{'use_sim_time': True}]
 ```
+
+### Offboard mode rejected by PX4
+
+The node must stream at least `streaming_threshold` (default 50) setpoints before PX4 accepts the offboard mode switch. Check that the control node is publishing to `/fmu/in/offboard_control_mode` at 50 Hz.
+
+### Joystick not detected
+
+```bash
+# List input devices
+ls /dev/input/js*
+
+# Test joystick
+jstest /dev/input/js0
+
+# Override device in launch
+ros2 launch px4_offboard_sim joy_control.launch.py joy_dev:=/dev/input/js1
+```
+
+## Documentation
+
+- [Sensor Configuration](docs/sensor_configuration.md) — Detailed sensor specs, coordinate frames, extrinsics, and bridge architecture
+- [Custom Gazebo Models](docs/custom_gazebo_models.md) — Guide to modifying worlds, drone models, and sensor parameters
 
 ## License
 
@@ -207,4 +376,4 @@ MIT License
 
 ## Author
 
-Kevin Medrano - kevin.ejem18@gmail.com
+Kevin Medrano — kevin.ejem18@gmail.com
