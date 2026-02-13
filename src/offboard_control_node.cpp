@@ -355,8 +355,9 @@ private:
 
     float altitude_agl = -current_pos_[2];
     if (altitude_agl < 0.3f && elapsed > 2.0) {
+      // Force disarm (param2=21196 bypasses PX4 land detector)
       publish_vehicle_command(
-        px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 0.0f);
+        px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 0.0f, 21196.0f);
     }
 
     if (arm_state_ != px4_msgs::msg::VehicleStatus::ARMING_STATE_ARMED) {
@@ -368,8 +369,9 @@ private:
     }
 
     if (elapsed > landing_timeout_) {
+      // Force disarm (param2=21196 bypasses PX4 land detector)
       publish_vehicle_command(
-        px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 0.0f);
+        px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 0.0f, 21196.0f);
       RCLCPP_WARN(get_logger(), "Landing timeout — forcing disarm");
     }
 
