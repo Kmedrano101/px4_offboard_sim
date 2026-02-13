@@ -41,7 +41,7 @@ frames:
   camera_offset: [0.12, 0.03, 0.242, 0.0, 0.0, 0.0]     # OakD-Lite mount position
 
 # ── World ─────────────────────────────────────────────────
-# Available: baylands, baylands_custom (with test walls), default
+# Available: baylands, baylands_custom (with test walls), obstacle_course (columns for path planning), default
 world: "baylands_custom"
 
 # ── Gazebo-ROS Bridge ────────────────────────────────────
