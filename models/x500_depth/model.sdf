@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sdf version='1.9'>
+  <model name='x500_depth'>
+    <include merge='true'>
+      <uri>x500</uri>
+    </include>
+    <include merge='true'>
+      <uri>model://OakD-Lite</uri>
+      <pose>.12 .03 .242 0 0 0</pose>
+    </include>
+    <joint name="CameraJoint" type="fixed">
+      <parent>base_link</parent>
+      <child>camera_link</child>
+      <pose relative_to="base_link">.12 .03 .242 0 0 0</pose>
+    </joint>
+
+    <!-- ============================================================ -->
+    <!-- 3D GPU LiDAR (360 deg scan for SLAM)                         -->
+    <!-- Mounted top-center above the frame                           -->
+    <!-- Visual mesh from PX4's lidar_2d_v2 model                     -->
+    <!-- Extrinsics: T_body_lidar = [0, 0, 0.052]                    -->
+    <!-- Sits on top of the FC (highest body surface at z~0.0515)     -->
+    <!-- Sensor specs match Livox Mid-360                              -->
+    <!-- ============================================================ -->
+    <link name="lidar_link">
+      <pose relative_to="base_link">0 0 0.052 0 0 0</pose>
+      <inertial>
+        <pose>0 0 0.0435 0 0 0</pose>
+        <mass>0.37</mass>
+        <inertia>
+          <ixx>0.000344</ixx>
+          <iyy>0.000344</iyy>
+          <izz>0.000222</izz>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyz>0.0</iyz>
+        </inertia>
+      </inertial>
+      <!-- Visual: PX4 lidar_2d_v2 mesh -->
+      <visual name="lidar_visual">
+        <geometry>
+          <mesh>
+            <uri>model://lidar_2d_v2/meshes/lidar_2d_v2.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <!-- Collision: matches PX4 lidar_2d_v2 geometry -->
+      <collision name="collision_base">
+        <pose>0 0 0.0205 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.06 0.06 0.041</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="collision_mid">
+        <pose>0 0 0.055 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.025</radius>
+            <length>0.028</length>
+          </cylinder>
+        </geometry>
+      </collision>
+      <collision name="collision_top">
+        <pose>0 0 0.078 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.056 0.056 0.018</size>
+          </box>
+        </geometry>
+      </collision>
+      <!-- Sensor: 3D GPU LiDAR for SLAM -->
+      <sensor name="lidar" type="gpu_lidar">
+        <gz_frame_id>lidar_link</gz_frame_id>
+        <pose>0 0 0.055 0 0 0</pose>
+        <update_rate>10</update_rate>
+        <always_on>true</always_on>
+        <visualize>true</visualize>
+        <ray>
+          <scan>
+            <horizontal>
+              <!-- 360 deg horizontal FOV -->
+              <samples>1800</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.14159</min_angle>
+              <max_angle>3.14159</max_angle>
+            </horizontal>
+            <vertical>
+              <!-- ~59 deg vertical FOV (-25 to +34 deg, Livox Mid-360-like) -->
+              <samples>120</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.4363</min_angle>
+              <max_angle>0.5934</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.3</min>
+            <max>40.0</max>
+            <resolution>0.003</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.01</stddev>
+          </noise>
+        </ray>
+      </sensor>
+    </link>
+    <joint name="lidar_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>lidar_link</child>
+    </joint>
+
+  </model>
+</sdf>
