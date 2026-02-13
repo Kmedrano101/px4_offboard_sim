@@ -57,8 +57,8 @@ public:
     this->declare_parameter("topics.offboard_control_mode", "/fmu/in/offboard_control_mode");
     this->declare_parameter("topics.trajectory_setpoint", "/fmu/in/trajectory_setpoint");
     this->declare_parameter("topics.vehicle_command", "/fmu/in/vehicle_command");
-    this->declare_parameter("topics.cmd_vel", "/offboard_control/cmd_vel");
-    this->declare_parameter("topics.arm", "/offboard_control/arm");
+    this->declare_parameter("topics.cmd_vel", "/px4_offboard_sim/offboard_control/cmd_vel");
+    this->declare_parameter("topics.arm", "/px4_offboard_sim/offboard_control/arm");
 
     // ── Read parameters ─────────────────────────────────────
     takeoff_altitude_ned_ = -std::abs(this->get_parameter("takeoff_altitude").as_double());

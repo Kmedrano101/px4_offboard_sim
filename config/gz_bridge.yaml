@@ -1,30 +1,32 @@
 # Gazebo-ROS2 Bridge Configuration for SLAM/Mapping
 # World: baylands_custom
-# Model: x500_lidar_360
+# Model: x500_depth
 #
 # Sensor Extrinsics (relative to base_link):
 #   IMU:   (0, 0, 0) - at base_link origin
-#   LiDAR: (0, 0, 0.26) - centered on top of drone
+#   LiDAR: (0, 0, 0.052) - centered on top of drone
 #
 # TF Tree: map -> odom -> base_link -> lidar_link
+# NOTE: This is a standalone config. The primary bridge is
+# generated at launch time from sim.yaml by sim.launch.py.
 
 # === 3D LiDAR Sensor (PointCloud2 for SLAM) ===
 - gz_topic_name: "/lidar/points"
-  ros_topic_name: "/lidar/points"
+  ros_topic_name: "/px4_offboard_sim/lidar/points"
   ros_type_name: "sensor_msgs/msg/PointCloud2"
   gz_type_name: "gz.msgs.PointCloudPacked"
   direction: "GZ_TO_ROS"
 
 # === 3D LiDAR Sensor (LaserScan for visualization/Nav2) ===
 - gz_topic_name: "/lidar"
-  ros_topic_name: "/lidar/scan"
+  ros_topic_name: "/px4_offboard_sim/lidar/scan"
   ros_type_name: "sensor_msgs/msg/LaserScan"
   gz_type_name: "gz.msgs.LaserScan"
   direction: "GZ_TO_ROS"
 
 # === IMU Sensor ===
 - gz_topic_name: "/imu"
-  ros_topic_name: "/imu/data"
+  ros_topic_name: "/px4_offboard_sim/imu/data"
   ros_type_name: "sensor_msgs/msg/Imu"
   gz_type_name: "gz.msgs.IMU"
   direction: "GZ_TO_ROS"

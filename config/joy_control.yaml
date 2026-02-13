@@ -30,6 +30,6 @@
 
     # Topics
     topics:
-      cmd_vel: "/offboard_control/cmd_vel"
-      arm: "/offboard_control/arm"
-      joy: "/joy"
+      cmd_vel: "/px4_offboard_sim/offboard_control/cmd_vel"
+      arm: "/px4_offboard_sim/offboard_control/arm"
+      joy: "/px4_offboard_sim/joy"

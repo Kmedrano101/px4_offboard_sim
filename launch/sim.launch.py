@@ -183,6 +183,10 @@ def _launch_joy_nodes(context):
             'dev': joy_dev,
             'use_sim_time': True,
         }],
+        remappings=[
+            ('/joy', '/px4_offboard_sim/joy'),
+            ('/joy/set_feedback', '/px4_offboard_sim/joy/set_feedback'),
+        ],
         output='screen',
     )
 
@@ -229,6 +233,13 @@ def generate_launch_description():
         default_value='true',
         choices=['true', 'false'],
         description='Launch offboard control node',
+    )
+
+    rviz_arg = DeclareLaunchArgument(
+        'rviz',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Launch RViz2 with sensor visualization',
     )
 
 
@@ -304,17 +315,49 @@ def generate_launch_description():
     # ── Symlinks + Bridge (OpaqueFunction — runs at launch time) ──
     setup_sim = OpaqueFunction(function=_setup_simulation)
 
-    # ── Static TF (map -> odom placeholder) ───────────────────
-    map_frame = CFG['frames']['map_frame_id']
-    body_frame = CFG['frames']['body_frame_id']
-    static_tf = Node(
+    # ── Static TF: map -> base_link -> {lidar_link, camera_link} ──
+    frames = CFG['frames']
+    map_frame = frames['map_frame_id']
+    base_frame = frames['base_frame_id']
+    lidar_frame = frames['lidar_frame_id']
+    camera_frame = frames['camera_frame_id']
+    lidar_off = frames['lidar_offset']
+    camera_off = frames['camera_offset']
+
+    static_tf_map_base = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
-        name='static_tf_map_odom',
+        name='static_tf_map_base',
         arguments=[
             '--x', '0', '--y', '0', '--z', '0',
             '--roll', '0', '--pitch', '0', '--yaw', '0',
-            '--frame-id', map_frame, '--child-frame-id', body_frame,
+            '--frame-id', map_frame, '--child-frame-id', base_frame,
+        ],
+        parameters=[{'use_sim_time': True}],
+        output='log',
+    )
+
+    static_tf_base_lidar = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_base_lidar',
+        arguments=[
+            '--x', str(lidar_off[0]), '--y', str(lidar_off[1]), '--z', str(lidar_off[2]),
+            '--roll', str(lidar_off[3]), '--pitch', str(lidar_off[4]), '--yaw', str(lidar_off[5]),
+            '--frame-id', base_frame, '--child-frame-id', lidar_frame,
+        ],
+        parameters=[{'use_sim_time': True}],
+        output='log',
+    )
+
+    static_tf_base_camera = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_base_camera',
+        arguments=[
+            '--x', str(camera_off[0]), '--y', str(camera_off[1]), '--z', str(camera_off[2]),
+            '--roll', str(camera_off[3]), '--pitch', str(camera_off[4]), '--yaw', str(camera_off[5]),
+            '--frame-id', base_frame, '--child-frame-id', camera_frame,
         ],
         parameters=[{'use_sim_time': True}],
         output='log',
@@ -340,11 +383,24 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('joy')),
     )
 
+    # ── RViz2 visualization ──────────────────────────────────
+    rviz_config = PathJoinSubstitution([pkg_share, 'resource', 'sim_visualize.rviz'])
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=['-d', rviz_config],
+        parameters=[{'use_sim_time': True}],
+        output='log',
+        condition=IfCondition(LaunchConfiguration('rviz')),
+    )
+
     return LaunchDescription([
         world_arg,
         px4_dir_arg,
         joy_arg,
         offboard_arg,
+        rviz_arg,
         set_gz_resource_path,
         set_gz_plugin_path,
         set_gz_server_config,
@@ -352,7 +408,10 @@ def generate_launch_description():
         dds_agent,
         px4_sitl,
         setup_sim,
-        static_tf,
+        static_tf_map_base,
+        static_tf_base_lidar,
+        static_tf_base_camera,
         offboard_node,
         joy_control_launch,
+        rviz_node,
     ])

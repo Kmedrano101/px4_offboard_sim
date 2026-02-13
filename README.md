@@ -46,14 +46,23 @@ This single command launches everything: PX4 SITL, MicroXRCE-DDS Agent, Gazebo-R
 ros2 launch px4_offboard_sim sim.launch.py
 ```
 
-Optional arguments:
+Launch arguments:
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `world` | `baylands_custom` | Gazebo world name (must match SDF filename) |
+| `px4_autopilot_dir` | `~/PX4-Autopilot` | Path to PX4-Autopilot checkout |
+| `joy` | `true` | Launch joy_node + joy_control_node for gamepad/keyboard |
+| `offboard` | `true` | Launch offboard control node |
+| `rviz` | `false` | Launch RViz2 with sensor visualization (LiDAR, depth camera, RGB, TF) |
 
 ```bash
 ros2 launch px4_offboard_sim sim.launch.py \
   world:=baylands_custom \
   px4_autopilot_dir:=~/PX4-Autopilot \
   joy:=true \
-  offboard:=true
+  offboard:=true \
+  rviz:=true
 ```
 
 ### Option B — Manual step-by-step
@@ -101,8 +110,8 @@ Gamepad / Keyboard
        ▼
  JoyControlNode          (velocity ramping, deadzone filtering)
        │
-       ▼  /offboard_control/cmd_vel (geometry_msgs/Twist)
-       │  /offboard_control/arm     (std_msgs/Bool)
+       ▼  /px4_offboard_sim/offboard_control/cmd_vel (geometry_msgs/Twist)
+       │  /px4_offboard_sim/offboard_control/arm     (std_msgs/Bool)
        │
        ▼
  OffboardControlNode     (state machine, setpoint generation)
@@ -122,7 +131,7 @@ Gamepad / Keyboard
        ▼
  ros_gz_bridge           (Gazebo → ROS2 message translation)
        │
-       ▼  /lidar/points, /imu/data, /clock
+       ▼  /px4_offboard_sim/{lidar/points, imu/data, camera/image, ...}, /clock
 ```
 
 ## Package Structure
@@ -155,7 +164,7 @@ px4_offboard_sim/
 ├── models/                          # Custom Gazebo models
 ├── resource/
 │   ├── drone_tf_params.yaml         # TF frame publisher params
-│   ├── visualize.rviz               # RViz2 visualization config
+│   ├── sim_visualize.rviz            # RViz2 visualization config (rviz:=true)
 │   └── gz_ros2_bridge_list.yaml
 ├── docs/
 │   ├── sensor_configuration.md      # Sensor specs and extrinsics
@@ -242,33 +251,42 @@ Handles keyboard and gamepad input with velocity ramping and smoothing.
 
 ### Gazebo → ROS2 Bridge Topics
 
+All ROS2 topics are namespaced under `/px4_offboard_sim/`.
+
 | Sensor | Gazebo Topic | ROS2 Topic | Message Type | Rate |
 |--------|-------------|------------|--------------|------|
-| 3D LiDAR (point cloud) | `/lidar/points` | `/lidar/points` | `sensor_msgs/PointCloud2` | 20 Hz |
-| 3D LiDAR (scan) | `/lidar` | `/lidar/scan` | `sensor_msgs/LaserScan` | 20 Hz |
-| IMU | `/imu` | `/imu/data` | `sensor_msgs/Imu` | 200 Hz |
+| RGB Camera | `.../camera_link/sensor/IMX214/image` | `/px4_offboard_sim/camera/image` | `sensor_msgs/Image` | ~7 Hz |
+| Camera Info | `.../camera_link/sensor/IMX214/camera_info` | `/px4_offboard_sim/camera/camera_info` | `sensor_msgs/CameraInfo` | ~7 Hz |
+| Depth Camera | `/depth_camera` | `/px4_offboard_sim/depth_camera/depth_image` | `sensor_msgs/Image` | ~5 Hz |
+| Depth PointCloud | `/depth_camera/points` | `/px4_offboard_sim/depth_camera/points` | `sensor_msgs/PointCloud2` | ~5 Hz |
+| 3D LiDAR (point cloud) | `.../lidar_link/sensor/lidar/scan/points` | `/px4_offboard_sim/lidar/points` | `sensor_msgs/PointCloud2` | ~13 Hz |
+| 3D LiDAR (scan) | `.../lidar_link/sensor/lidar/scan` | `/px4_offboard_sim/lidar/scan` | `sensor_msgs/LaserScan` | ~7 Hz |
+| IMU | `.../base_link/sensor/imu_sensor/imu` | `/px4_offboard_sim/imu/data` | `sensor_msgs/Imu` | ~170 Hz |
 | Clock | `/clock` | `/clock` | `rosgraph_msgs/Clock` | Sim time |
 
-### 3D LiDAR Specifications
+### 3D LiDAR Specifications (Livox Mid-360-like)
 
 | Parameter | Value |
 |-----------|-------|
 | Horizontal FOV | 360° |
-| Horizontal samples | 720 (0.5° resolution) |
-| Vertical FOV | 45° (±22.5°) |
-| Vertical channels | 16 (2.8° resolution) |
-| Points per scan | 11,520 |
-| Range | 0.1 – 30.0 m |
-| Update rate | 20 Hz |
+| Horizontal samples | 1800 (0.2° resolution) |
+| Vertical FOV | ~59° (-25° to +34°) |
+| Vertical channels | 120 (~0.49° resolution) |
+| Points per scan | 216,000 |
+| Range | 0.3 – 40.0 m |
+| Range resolution | 0.003 m |
+| Update rate | 10 Hz |
+| Noise | Gaussian, stddev 0.01 |
 
 ### Sensor Extrinsics
 
-TF tree: `map → odom → base_link → lidar_link`
+TF tree: `map → base_link → {lidar_link, camera_link}`
 
 | Sensor | Frame | Position (relative to base_link) | Orientation |
 |--------|-------|----------------------------------|-------------|
 | IMU | `base_link` | (0, 0, 0) m | Identity |
-| LiDAR | `lidar_link` | (0, 0, 0.26) m | Identity |
+| LiDAR | `lidar_link` | (0, 0, 0.052) m | Identity |
+| RGB + Depth Camera | `camera_link` | (0.12, 0.03, 0.242) m | Identity |
 
 ## Custom Gazebo Models
 

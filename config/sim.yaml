@@ -29,9 +29,16 @@ dds_agent:
 rmw_implementation: "rmw_fastrtps_cpp"
 
 # ── TF Frames ────────────────────────────────────────────
+# Static TF tree: map -> base_link -> {lidar_link, camera_link}
+# Sensor offsets match the Gazebo SDF model (x500_depth)
 frames:
   map_frame_id: "map"
-  body_frame_id: "odom"
+  base_frame_id: "base_link"
+  lidar_frame_id: "lidar_link"
+  camera_frame_id: "camera_link"
+  # Sensor poses relative to base_link (from model.sdf)
+  lidar_offset: [0.0, 0.0, 0.052, 0.0, 0.0, 0.0]       # x, y, z, roll, pitch, yaw
+  camera_offset: [0.12, 0.03, 0.242, 0.0, 0.0, 0.0]     # OakD-Lite mount position
 
 # ── World ─────────────────────────────────────────────────
 # Available: baylands, baylands_custom (with test walls), default
@@ -46,37 +53,57 @@ world: "baylands_custom"
 # model_instance is derived as: sim_model (without gz_ prefix) + "_0"
 bridge:
   sensors:
+    # OakD-Lite RGB camera (sensor: IMX214 on camera_link)
     - name: "RGB Camera"
-      gz_topic: "/world/{world}/model/{model}/link/camera_link/sensor/camera/image"
-      ros_topic: "/sim_camera/camera"
+      gz_topic: "/world/{world}/model/{model}/link/camera_link/sensor/IMX214/image"
+      ros_topic: "/px4_offboard_sim/camera/image"
       ros_type: "sensor_msgs/msg/Image"
       gz_type: "gz.msgs.Image"
       queue: 5
 
     - name: "Camera Info"
-      gz_topic: "/world/{world}/model/{model}/link/camera_link/sensor/camera/camera_info"
-      ros_topic: "/sim_camera/camera_info"
+      gz_topic: "/world/{world}/model/{model}/link/camera_link/sensor/IMX214/camera_info"
+      ros_topic: "/px4_offboard_sim/camera/camera_info"
       ros_type: "sensor_msgs/msg/CameraInfo"
       gz_type: "gz.msgs.CameraInfo"
       queue: 5
 
+    # OakD-Lite depth camera (sensor: StereoOV7251 on camera_link)
+    # Uses <topic>depth_camera</topic> in SDF, so Gazebo publishes to
+    # top-level /depth_camera (NOT world-scoped like other sensors).
     - name: "Depth Camera"
-      gz_topic: "/world/{world}/model/{model}/link/depth_camera_link/sensor/depth_camera/depth_image"
-      ros_topic: "/sim_depth_camera/depth_camera"
+      gz_topic: "/depth_camera"
+      ros_topic: "/px4_offboard_sim/depth_camera/depth_image"
       ros_type: "sensor_msgs/msg/Image"
       gz_type: "gz.msgs.Image"
       queue: 5
 
     - name: "Depth PointCloud"
-      gz_topic: "/world/{world}/model/{model}/link/depth_camera_link/sensor/depth_camera/points"
-      ros_topic: "/sim_depth_camera/points"
+      gz_topic: "/depth_camera/points"
+      ros_topic: "/px4_offboard_sim/depth_camera/points"
       ros_type: "sensor_msgs/msg/PointCloud2"
       gz_type: "gz.msgs.PointCloudPacked"
       queue: 5
 
+    # 3D GPU LiDAR (sensor: lidar on lidar_link)
+    - name: "LiDAR PointCloud"
+      gz_topic: "/world/{world}/model/{model}/link/lidar_link/sensor/lidar/scan/points"
+      ros_topic: "/px4_offboard_sim/lidar/points"
+      ros_type: "sensor_msgs/msg/PointCloud2"
+      gz_type: "gz.msgs.PointCloudPacked"
+      queue: 5
+
+    - name: "LiDAR Scan"
+      gz_topic: "/world/{world}/model/{model}/link/lidar_link/sensor/lidar/scan"
+      ros_topic: "/px4_offboard_sim/lidar/scan"
+      ros_type: "sensor_msgs/msg/LaserScan"
+      gz_type: "gz.msgs.LaserScan"
+      queue: 5
+
+    # PX4 internal IMU (sensor: imu_sensor on base_link from x500_base)
     - name: "IMU"
-      gz_topic: "/world/{world}/model/{model}/link/imu_link/sensor/imu/imu"
-      ros_topic: "/sim_imu/imu"
+      gz_topic: "/world/{world}/model/{model}/link/base_link/sensor/imu_sensor/imu"
+      ros_topic: "/px4_offboard_sim/imu/data"
       ros_type: "sensor_msgs/msg/Imu"
       gz_type: "gz.msgs.IMU"
       queue: 10

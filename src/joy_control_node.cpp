@@ -82,9 +82,9 @@ public:
 
     this->declare_parameter("control_rate", 50.0);
 
-    this->declare_parameter("topics.cmd_vel", "/offboard_control/cmd_vel");
-    this->declare_parameter("topics.arm", "/offboard_control/arm");
-    this->declare_parameter("topics.joy", "/joy");
+    this->declare_parameter("topics.cmd_vel", "/px4_offboard_sim/offboard_control/cmd_vel");
+    this->declare_parameter("topics.arm", "/px4_offboard_sim/offboard_control/arm");
+    this->declare_parameter("topics.joy", "/px4_offboard_sim/joy");
 
     // ── Read parameters ─────────────────────────────────────
     speed_ = this->get_parameter("speed").as_double();
