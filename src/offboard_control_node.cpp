@@ -6,6 +6,7 @@
 #include <px4_msgs/msg/vehicle_command.hpp>
 #include <px4_msgs/msg/vehicle_local_position.hpp>
 #include <geometry_msgs/msg/twist.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <cmath>
 #include <chrono>
@@ -59,6 +60,11 @@ public:
     this->declare_parameter("topics.vehicle_command", "/fmu/in/vehicle_command");
     this->declare_parameter("topics.cmd_vel", "/px4_offboard_sim/offboard_control/cmd_vel");
     this->declare_parameter("topics.arm", "/px4_offboard_sim/offboard_control/arm");
+    this->declare_parameter("topics.target_pose", "/px4_offboard_sim/offboard_control/target_pose");
+    this->declare_parameter("topics.mpc_setpoint", "/px4_offboard_sim/offboard_control/mpc_setpoint");
+    this->declare_parameter("planner_timeout", 2.0);
+    this->declare_parameter("planner_goal_threshold", 0.5);
+    this->declare_parameter("planner_goal_hold_time", 3.0);
 
     // ── Read parameters ─────────────────────────────────────
     takeoff_altitude_ned_ = -std::abs(this->get_parameter("takeoff_altitude").as_double());
@@ -79,6 +85,11 @@ public:
     auto t_cmd = this->get_parameter("topics.vehicle_command").as_string();
     auto t_vel = this->get_parameter("topics.cmd_vel").as_string();
     auto t_arm = this->get_parameter("topics.arm").as_string();
+    auto t_target_pose = this->get_parameter("topics.target_pose").as_string();
+    auto t_mpc_setpoint = this->get_parameter("topics.mpc_setpoint").as_string();
+    planner_timeout_ = this->get_parameter("planner_timeout").as_double();
+    planner_goal_threshold_ = static_cast<float>(this->get_parameter("planner_goal_threshold").as_double());
+    planner_goal_hold_time_ = this->get_parameter("planner_goal_hold_time").as_double();
 
     // ── QoS for PX4 (BEST_EFFORT, VOLATILE, depth 1) ───────
     auto px4_qos = rclcpp::QoS(1)
@@ -106,6 +117,14 @@ public:
     arm_sub_ = this->create_subscription<std_msgs::msg::Bool>(
       t_arm, rclcpp::QoS(10),
       std::bind(&OffboardControlNode::arm_cb, this, std::placeholders::_1));
+
+    target_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
+      t_target_pose, rclcpp::QoS(10),
+      std::bind(&OffboardControlNode::target_pose_cb, this, std::placeholders::_1));
+
+    mpc_setpoint_sub_ = this->create_subscription<px4_msgs::msg::TrajectorySetpoint>(
+      t_mpc_setpoint, px4_qos,
+      std::bind(&OffboardControlNode::mpc_setpoint_cb, this, std::placeholders::_1));
 
     // ── Publishers ──────────────────────────────────────────
     offboard_mode_pub_ = this->create_publisher<px4_msgs::msg::OffboardControlMode>(
@@ -174,6 +193,108 @@ private:
   {
     arm_command_ = msg->data;
     RCLCPP_INFO(get_logger(), "Arm command: %s", arm_command_ ? "ARM" : "DISARM");
+  }
+
+  /// Planner target pose callback (ENU frame from px4_super_bridge)
+  /// Converts ENU position to NED for PX4 and activates TRAJECTORY mode.
+  /// On first activation, calibrates frame offset between planner frame
+  /// (FAST-LIO camera_init) and PX4 NED frame.
+  void target_pose_cb(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+  {
+    if (state_ != FlightState::HOVER) return;
+
+    // MPC takes priority over bridge when active
+    if (control_mode_ == ControlMode::MPC_TRAJECTORY) return;
+
+    // ENU→NED: ned_x=enu_y, ned_y=enu_x, ned_z=-enu_z
+    float raw_ned[3];
+    raw_ned[0] = static_cast<float>(msg->pose.position.y);   // North
+    raw_ned[1] = static_cast<float>(msg->pose.position.x);   // East
+    raw_ned[2] = static_cast<float>(-msg->pose.position.z);  // Down
+
+    // Calibrate frame offset on first planner command
+    if (!planner_frame_calibrated_) {
+      for (int i = 0; i < 3; i++)
+        planner_offset_ned_[i] = current_pos_[i] - raw_ned[i];
+      planner_frame_calibrated_ = true;
+      RCLCPP_INFO(get_logger(),
+        "Planner frame calibrated: offset NED = (%.2f, %.2f, %.2f)",
+        planner_offset_ned_[0], planner_offset_ned_[1], planner_offset_ned_[2]);
+    }
+
+    // Apply frame offset
+    float new_pos[3];
+    new_pos[0] = raw_ned[0] + planner_offset_ned_[0];
+    new_pos[1] = raw_ned[1] + planner_offset_ned_[1];
+    new_pos[2] = raw_ned[2] + planner_offset_ned_[2];
+
+    // If we already reached the goal, only re-enter TRAJECTORY if the
+    // planner is commanding a significantly different position (new goal)
+    if (planner_goal_reached_) {
+      float dx = new_pos[0] - target_pos_[0];
+      float dy = new_pos[1] - target_pos_[1];
+      float dz = new_pos[2] - target_pos_[2];
+      float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+      if (dist < planner_goal_threshold_ * 2.0f) {
+        // Still near the reached goal, ignore
+        planner_last_time_ = now_sec();
+        return;
+      }
+      // New goal detected, reset
+      planner_goal_reached_ = false;
+      RCLCPP_INFO(get_logger(), "New planner goal detected (%.1fm from hold pos)", dist);
+    }
+
+    planner_pos_[0] = new_pos[0];
+    planner_pos_[1] = new_pos[1];
+    planner_pos_[2] = new_pos[2];
+
+    // Extract yaw from quaternion (ENU) and convert to NED
+    double siny = 2.0 * (msg->pose.orientation.w * msg->pose.orientation.z +
+                          msg->pose.orientation.x * msg->pose.orientation.y);
+    double cosy = 1.0 - 2.0 * (msg->pose.orientation.y * msg->pose.orientation.y +
+                                 msg->pose.orientation.z * msg->pose.orientation.z);
+    float enu_yaw = static_cast<float>(std::atan2(siny, cosy));
+
+    // ENU yaw (0=East, CCW+) → NED yaw (0=North, CW+): ned_yaw = pi/2 - enu_yaw
+    float ned_yaw = static_cast<float>(M_PI_2) - enu_yaw;
+    // Wrap to [-pi, pi]
+    while (ned_yaw > M_PI) ned_yaw -= 2.0f * M_PI;
+    while (ned_yaw < -M_PI) ned_yaw += 2.0f * M_PI;
+    planner_yaw_ = ned_yaw;
+
+    planner_last_time_ = now_sec();
+
+    if (control_mode_ != ControlMode::TRAJECTORY) {
+      control_mode_ = ControlMode::TRAJECTORY;
+      planner_near_goal_start_ = 0.0;
+      RCLCPP_INFO(get_logger(), "TRAJECTORY mode: planner active");
+    }
+  }
+
+  /// MPC trajectory setpoint callback (already in NED frame from px4_mpc_controller)
+  void mpc_setpoint_cb(const px4_msgs::msg::TrajectorySetpoint::SharedPtr msg)
+  {
+    if (state_ != FlightState::HOVER) return;
+
+    // MPC takes priority — if bridge TRAJECTORY mode is active, override it
+    mpc_pos_[0] = msg->position[0];
+    mpc_pos_[1] = msg->position[1];
+    mpc_pos_[2] = msg->position[2];
+    mpc_vel_[0] = msg->velocity[0];
+    mpc_vel_[1] = msg->velocity[1];
+    mpc_vel_[2] = msg->velocity[2];
+    mpc_acc_[0] = msg->acceleration[0];
+    mpc_acc_[1] = msg->acceleration[1];
+    mpc_acc_[2] = msg->acceleration[2];
+    mpc_yaw_ = msg->yaw;
+    mpc_yawspeed_ = msg->yawspeed;
+    mpc_last_time_ = now_sec();
+
+    if (control_mode_ != ControlMode::MPC_TRAJECTORY) {
+      control_mode_ = ControlMode::MPC_TRAJECTORY;
+      RCLCPP_INFO(get_logger(), "MPC_TRAJECTORY mode: MPC controller active");
+    }
   }
 
   // ── Main control loop ───────────────────────────────────────
@@ -302,7 +423,57 @@ private:
       velocity_frd_[1] * velocity_frd_[1] +
       velocity_frd_[2] * velocity_frd_[2]) + std::abs(yaw_rate_);
 
-    if (control_mode_ == ControlMode::POSITION) {
+    if (control_mode_ == ControlMode::MPC_TRAJECTORY) {
+      // MPC controller is active - check for timeout
+      if (now_sec() - mpc_last_time_ > planner_timeout_) {
+        target_pos_[0] = current_pos_[0];
+        target_pos_[1] = current_pos_[1];
+        target_pos_[2] = current_pos_[2];
+        target_yaw_ = true_yaw_;
+        control_mode_ = ControlMode::POSITION;
+        mpc_goal_reached_ = false;
+        mpc_near_goal_start_ = 0.0;
+        RCLCPP_WARN(get_logger(), "MPC timeout — holding position");
+      }
+      // MPC controller handles its own goal detection and will stop publishing
+      // when trajectory is complete, which triggers the timeout above.
+    } else if (control_mode_ == ControlMode::TRAJECTORY) {
+      // Planner is active - check for timeout
+      if (now_sec() - planner_last_time_ > planner_timeout_) {
+        target_pos_[0] = current_pos_[0];
+        target_pos_[1] = current_pos_[1];
+        target_pos_[2] = current_pos_[2];
+        target_yaw_ = true_yaw_;
+        control_mode_ = ControlMode::POSITION;
+        planner_frame_calibrated_ = false;
+        planner_goal_reached_ = false;
+        planner_near_goal_start_ = 0.0;
+        RCLCPP_WARN(get_logger(), "Planner timeout — holding position");
+      } else {
+        // Check if drone is close to planner setpoint (goal reached)
+        float dx = current_pos_[0] - planner_pos_[0];
+        float dy = current_pos_[1] - planner_pos_[1];
+        float dz = current_pos_[2] - planner_pos_[2];
+        float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+        if (dist < planner_goal_threshold_) {
+          if (planner_near_goal_start_ == 0.0)
+            planner_near_goal_start_ = now_sec();
+          if (now_sec() - planner_near_goal_start_ >= planner_goal_hold_time_) {
+            target_pos_[0] = planner_pos_[0];
+            target_pos_[1] = planner_pos_[1];
+            target_pos_[2] = planner_pos_[2];
+            target_yaw_ = planner_yaw_;
+            control_mode_ = ControlMode::POSITION;
+            planner_goal_reached_ = true;
+            planner_near_goal_start_ = 0.0;
+            RCLCPP_INFO(get_logger(), "Goal reached — holding position at (%.2f, %.2f, %.2f)",
+                        target_pos_[0], target_pos_[1], -target_pos_[2]);
+          }
+        } else {
+          planner_near_goal_start_ = 0.0;
+        }
+      }
+    } else if (control_mode_ == ControlMode::POSITION) {
       if (vel_mag > velocity_threshold_) {
         control_mode_ = ControlMode::VELOCITY;
         velocity_idle_start_ = 0.0;
@@ -399,14 +570,20 @@ private:
     if (state_ == FlightState::LANDING) {
       msg.position = true;
       msg.velocity = false;
-    } else if (control_mode_ == ControlMode::POSITION) {
+      msg.acceleration = false;
+    } else if (control_mode_ == ControlMode::MPC_TRAJECTORY) {
+      msg.position = true;
+      msg.velocity = true;
+      msg.acceleration = true;  // Enable acceleration feedforward in PX4
+    } else if (control_mode_ == ControlMode::POSITION || control_mode_ == ControlMode::TRAJECTORY) {
       msg.position = true;
       msg.velocity = false;
+      msg.acceleration = false;
     } else {
       msg.position = false;
       msg.velocity = true;
+      msg.acceleration = false;
     }
-    msg.acceleration = false;
     msg.attitude = false;
     msg.body_rate = false;
     offboard_mode_pub_->publish(msg);
@@ -424,6 +601,27 @@ private:
       msg.position[2] = target_pos_[2];
       msg.velocity = {NAN_F, NAN_F, NAN_F};
       msg.yaw = target_yaw_;
+      msg.yawspeed = NAN_F;
+    } else if (control_mode_ == ControlMode::MPC_TRAJECTORY) {
+      msg.position[0] = mpc_pos_[0];
+      msg.position[1] = mpc_pos_[1];
+      msg.position[2] = mpc_pos_[2];
+      msg.velocity[0] = mpc_vel_[0];
+      msg.velocity[1] = mpc_vel_[1];
+      msg.velocity[2] = mpc_vel_[2];
+      msg.acceleration[0] = mpc_acc_[0];
+      msg.acceleration[1] = mpc_acc_[1];
+      msg.acceleration[2] = mpc_acc_[2];
+      msg.yaw = mpc_yaw_;
+      msg.yawspeed = mpc_yawspeed_;
+      trajectory_pub_->publish(msg);
+      return;  // Skip the common acceleration = NaN below
+    } else if (control_mode_ == ControlMode::TRAJECTORY) {
+      msg.position[0] = planner_pos_[0];
+      msg.position[1] = planner_pos_[1];
+      msg.position[2] = planner_pos_[2];
+      msg.velocity = {NAN_F, NAN_F, NAN_F};
+      msg.yaw = planner_yaw_;
       msg.yawspeed = NAN_F;
     } else if (control_mode_ == ControlMode::POSITION) {
       msg.position[0] = target_pos_[0];
@@ -478,7 +676,7 @@ private:
 
   // ── Types ───────────────────────────────────────────────────
 
-  enum class ControlMode { POSITION, VELOCITY };
+  enum class ControlMode { POSITION, VELOCITY, TRAJECTORY, MPC_TRAJECTORY };
 
   // ── Subscriptions ───────────────────────────────────────────
   rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr status_sub_;
@@ -486,6 +684,8 @@ private:
   rclcpp::Subscription<px4_msgs::msg::VehicleLocalPosition>::SharedPtr local_pos_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr arm_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr target_pose_sub_;
+  rclcpp::Subscription<px4_msgs::msg::TrajectorySetpoint>::SharedPtr mpc_setpoint_sub_;
 
   // ── Publishers ──────────────────────────────────────────────
   rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr offboard_mode_pub_;
@@ -524,6 +724,28 @@ private:
   float target_yaw_{0.0f};
   float velocity_frd_[3]{0.0f, 0.0f, 0.0f};
   float yaw_rate_{0.0f};
+
+  // ── Planner (TRAJECTORY mode) ────────────────────────────────
+  float planner_pos_[3]{0.0f, 0.0f, 0.0f};
+  float planner_yaw_{0.0f};
+  double planner_last_time_{0.0};
+  double planner_timeout_{2.0};
+  float planner_offset_ned_[3]{0.0f, 0.0f, 0.0f};
+  bool planner_frame_calibrated_{false};
+  bool planner_goal_reached_{false};
+  float planner_goal_threshold_{0.5f};
+  double planner_goal_hold_time_{3.0};
+  double planner_near_goal_start_{0.0};
+
+  // ── MPC (MPC_TRAJECTORY mode) ────────────────────────────────
+  float mpc_pos_[3]{0.0f, 0.0f, 0.0f};
+  float mpc_vel_[3]{0.0f, 0.0f, 0.0f};
+  float mpc_acc_[3]{0.0f, 0.0f, 0.0f};
+  float mpc_yaw_{0.0f};
+  float mpc_yawspeed_{0.0f};
+  double mpc_last_time_{0.0};
+  bool mpc_goal_reached_{false};
+  double mpc_near_goal_start_{0.0};
 
   // ── Timing ──────────────────────────────────────────────────
   double takeoff_time_{0.0};

@@ -148,7 +148,7 @@ px4_offboard_sim/
 │   ├── sim.launch.py                # Full-stack master launcher
 │   ├── offboard_control.launch.py   # Standalone offboard control
 │   ├── joy_control.launch.py        # Standalone joy with controller selection
-│   ├── slam_simulation.launch.py    # RTAB-Map SLAM launcher
+│   ├── slam_simulation.launch.py    # RTAB-Map SLAM launcher (deprecated → fast_lio_ros2/launch/sim_slam.launch.py)
 │   ├── px4_offboard_3d_mapping.launch.py
 │   └── px4_offboard_ros2_control.launch.py
 ├── config/
@@ -324,7 +324,7 @@ See [docs/custom_gazebo_models.md](docs/custom_gazebo_models.md) for details on 
 | `sim.launch.py` | Full-stack: PX4 SITL + XRCE-DDS + bridge + control + TF |
 | `offboard_control.launch.py` | Offboard control node only |
 | `joy_control.launch.py` | Joy control with controller selection (`tpro` / `gamepad`) |
-| `slam_simulation.launch.py` | RTAB-Map SLAM integration |
+| `slam_simulation.launch.py` | RTAB-Map SLAM (deprecated → `fast_lio_ros2 sim_slam.launch.py`) |
 | `px4_offboard_3d_mapping.launch.py` | 3D mapping pipeline |
 | `px4_offboard_ros2_control.launch.py` | Legacy launcher with RViz |
 
