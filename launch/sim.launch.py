@@ -195,6 +195,7 @@ def _launch_joy_nodes(context):
         executable='joy_control_node',
         name='joy_control',
         parameters=[config_file, {'use_sim_time': True}],
+        prefix='gnome-terminal --',
         output='screen',
     )
 

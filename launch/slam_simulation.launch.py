@@ -28,7 +28,10 @@ def generate_launch_description():
             executable='joy_control_node',
             name='joy_control',
             prefix='gnome-terminal --',
-            parameters=[{'use_sim_time': True}]
+            parameters=[
+                os.path.join(package_dir, 'config', 'joy_control.yaml'),
+                {'use_sim_time': True},
+            ]
         ),
         Node(
             package='ros_gz_bridge',

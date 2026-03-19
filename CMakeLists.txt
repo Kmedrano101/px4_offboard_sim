@@ -39,6 +39,7 @@ ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS
   px4_offboard_sim/processes.py
   DESTINATION lib/${PROJECT_NAME}
+  RENAME processes
 )
 
 # ── Config, launch, resource, worlds, and models ─────────────

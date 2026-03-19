@@ -14,7 +14,7 @@ def main():
         "MicroXRCEAgent udp4 -p 8888",
 
         # Run the PX4 SITL simulation (Gazebo Harmonic for ROS2 Jazzy)
-        "cd ~/PX4-Autopilot && PX4_GZ_WORLD=baylands_custom make px4_sitl gz_x500_lidar_360"
+        "cd ~/PX4-Autopilot && PX4_GZ_WORLD=baylands_custom make px4_sitl gz_x500_depth"
 
         # Run QGroundControl
         # "cd ~/qgroundcontrol && ./QGroundControl.AppImage"
